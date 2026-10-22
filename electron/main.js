@@ -58,6 +58,103 @@ if (LaunchSettings.get('hardware_acceleration') == false) {
 	}
 }
 
+// Native application menu on macOS. The menu bar menus are provided by each window's renderer
+const native_bar_menus = new Map();
+
+function convertNativeMenuItems(items, web_contents) {
+	return items.map(item => {
+		let converted = {
+			label: item.label,
+			type: item.type,
+			checked: item.checked,
+			accelerator: item.accelerator,
+		};
+		if (item.submenu) {
+			converted.submenu = convertNativeMenuItems(item.submenu, web_contents);
+		}
+		if (typeof item.id == 'number') {
+			converted.click = (menu_item, window, event) => {
+				// Keybindings are handled by Blockbench itself, accelerators are only displayed
+				if (event.triggeredByAccelerator) return;
+				if (!web_contents.isDestroyed()) web_contents.send('native-menu-bar-click', item.id);
+			}
+		}
+		return converted;
+	})
+}
+
+function updateMacMenu(web_contents) {
+	let bar_menus = web_contents && native_bar_menus.get(web_contents.id);
+	let edit_roles = [
+		{role: 'cut'},
+		{role: 'copy'},
+		{role: 'paste'},
+		{role: 'selectAll'}
+	];
+	let template = [
+		{
+			label: 'Blockbench',
+			submenu: [
+				{role: 'hide'},
+				{role: 'hideOthers'},
+				{role: 'unhide'},
+				{type: 'separator'},
+				{role: 'quit'}
+			]
+		}
+	];
+	if (bar_menus) {
+		for (let bar_menu of bar_menus) {
+			let submenu = convertNativeMenuItems(bar_menu.submenu, web_contents);
+			if (bar_menu.id == 'edit') {
+				// Keep native clipboard shortcuts working in text inputs
+				submenu.push(...edit_roles.map(role => ({...role, visible: false})));
+			}
+			template.push({label: bar_menu.label, submenu});
+		}
+	} else {
+		template.push({label: 'Edit', submenu: edit_roles});
+	}
+	template.push({
+		label: 'Window',
+		role: 'window',
+		submenu: [
+			{role: 'togglefullscreen'},
+			{role: 'minimize'},
+			{role: 'close'},
+			{type: 'separator'},
+			{role: 'front'}
+		]
+	});
+
+	let menu = Menu.buildFromTemplate(template);
+	if (web_contents) {
+		// Refresh the menu content after it was used, since it depends on the app state
+		for (let item of menu.items) {
+			item.submenu?.on('menu-will-close', () => {
+				if (!web_contents.isDestroyed()) web_contents.send('native-menu-bar-closed');
+			})
+		}
+	}
+	Menu.setApplicationMenu(menu);
+}
+
+ipcMain.on('update-native-menu-bar', (event, bar_menus) => {
+	native_bar_menus.set(event.sender.id, bar_menus);
+	let focused = BrowserWindow.getFocusedWindow();
+	if (!focused || focused.webContents == event.sender) {
+		updateMacMenu(event.sender);
+	}
+})
+app.on('browser-window-focus', (event, win) => {
+	if (process.platform !== 'darwin') return;
+	updateMacMenu(win.webContents);
+})
+app.on('web-contents-created', (event, web_contents) => {
+	let id = web_contents.id;
+	web_contents.once('destroyed', () => native_bar_menus.delete(id));
+})
+
 function createWindow(second_instance, options = {}) {
 	if (app.requestSingleInstanceLock && !app.requestSingleInstanceLock()) {
 		app.quit()
@@ -93,72 +190,7 @@ function createWindow(second_instance, options = {}) {
 	remote.enable(win.webContents)
 
 	if (process.platform === 'darwin') {
-
-		let template = [
-			{
-				"label": "Blockbench",
-				"submenu": [
-					{
-						"role": "hide"
-					},
-					{
-						"role": "hideothers"
-					},
-					{
-						"role": "unhide"
-					},
-					{
-						"type": "separator"
-					},
-					{
-                        "role": "quit"
-					}
-				]
-			},
-			{
-				"label": "Edit",
-				"submenu": [
-					{
-						"role": "cut"
-					},
-					{
-						"role": "copy"
-					},
-					{
-						"role": "paste"
-					},
-					{
-						"role": "selectall"
-					}
-				]
-			},
-			{
-				"label": "Window",
-				"role": "window",
-				"submenu": [
-					{
-						"label": "Toggle Full Screen",
-						"accelerator": "Ctrl+Command+F"
-					},
-					{
-						"role": "minimize"
-					},
-					{
-						"role": "close"
-					},
-					{
-						"type": "separator"
-					},
-					{
-						"role": "front"
-					}
-				]
-			}
-		]
-
-
-		var osxMenu = Menu.buildFromTemplate(template);
-		Menu.setApplicationMenu(osxMenu)
+		if (all_wins.length == 1) updateMacMenu();
 	} else {
 		win.setMenu(null);
 	}

@@ -560,6 +560,9 @@
 	ul#menu_bar {
 		height: 28px;
 	}
+	body.native_menu_bar ul#menu_bar {
+		display: none;
+	}
 	li.menu_bar_point {
 		font-size: 17px;
 		padding: 0 8px;

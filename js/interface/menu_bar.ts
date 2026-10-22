@@ -853,6 +853,7 @@ export const MenuBar = {
 				}
 			}
 		}
+		Blockbench.dispatchEvent('update_menu_bar', {});
 	},
 	/**
 	 * Adds an action to the menu structure

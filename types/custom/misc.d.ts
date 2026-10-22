@@ -135,6 +135,7 @@ interface BlockbenchEventMap {
 		event: KeyboardEvent
 	}
 	open_bar_menu: {menu: BarMenu}
+	update_menu_bar: {}
 	unselect_all: {}
 	get_face_texture: {face: Face, element: OutlinerElement}
 	quick_save_model: {}

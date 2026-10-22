@@ -3,6 +3,7 @@ import { addStartScreenSection } from './interface/start_screen';
 import { electron, app, fs, PathModule, currentwindow, shell, ipcRenderer, process, nativeImage, SystemInfo } from './native_apis';
 import { separateThousands } from './util/math_util';
 import { silentReject, wait } from './util/util';
+import { setupNativeMenuBar } from './interface/native_menu_bar';
 
 export const recent_projects = (function() {
 	let array: RecentProjectData[] = [];
@@ -65,6 +66,9 @@ export function initializeDesktopApp() {
 		} else {
 			$('#windows_window_menu').show()
 		}
+	}
+	if (Blockbench.platform == 'darwin') {
+		setupNativeMenuBar();
 	}
 	if (Blockbench.platform == 'linux') {
 		// Clear GPU cache: https://github.com/JannisX11/blockbench/issues/1964
